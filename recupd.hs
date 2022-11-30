@@ -40,3 +40,6 @@ multiUpdate =
 
 singleUpdateFn =
     updateField #name "hello"
+
+multiUpdateFn x =
+    updateField #name "hello" $ updateField #age (5 :: Int) x
