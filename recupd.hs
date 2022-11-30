@@ -36,3 +36,6 @@ singleUpdate = updateField #name "hello" (A { name = "goodbye", age = 10 })
 
 multiUpdate =
     updateField #name "hello" $ updateField #age (5 :: Int) defaultA
+
+singleUpdateFn =
+    updateField #name "hello"
