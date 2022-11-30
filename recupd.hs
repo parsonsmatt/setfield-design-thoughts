@@ -30,4 +30,9 @@ instance (B ~ t) => UpdateField "age" B t String where
 instance (KnownSymbol sym, sym ~ sym') => IsLabel sym (Proxy sym') where
     fromLabel = Proxy
 
+defaultA = A { name = "goodbye", age = 10 }
+
 singleUpdate = updateField #name "hello" (A { name = "goodbye", age = 10 })
+
+multiUpdate =
+    updateField #name "hello" $ updateField #age (5 :: Int) defaultA
