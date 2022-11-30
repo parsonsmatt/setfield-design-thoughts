@@ -1,4 +1,5 @@
 {-# language DuplicateRecordFields #-}
+{-# language FunctionalDependencies  #-}
 {-# language NoMonomorphismRestriction #-}
 {-# language OverloadedLabels #-}
 {-# language DataKinds #-}
@@ -11,7 +12,7 @@ data A = A { name :: String, age :: Int }
 
 data B = B { name :: Int, age :: String}
 
-class UpdateField (sym :: Symbol) s t a where
+class UpdateField (sym :: Symbol) s t a | sym t a -> s where
     updateField :: Proxy sym -> a -> s -> t
 
 -- In the case of monomorphic update, we can introduce a constraint that
@@ -42,4 +43,4 @@ singleUpdateFn =
     updateField #name "hello"
 
 multiUpdateFn x =
-    updateField #name "hello" $ updateField #age (5 :: Int) x
+    updateField #name "hello" $ updateField #age (5 :: Int) x :: A
