@@ -1,4 +1,5 @@
 {-# language DuplicateRecordFields #-}
+{-# language NoMonomorphismRestriction #-}
 {-# language OverloadedLabels #-}
 {-# language DataKinds #-}
 
