@@ -10,6 +10,8 @@ import Data.Proxy
 
 data A = A { name :: String, age :: Int }
 
+data A' = A' { name :: String, age :: Int }
+
 data B = B { name :: Int, age :: String}
 
 class UpdateField (sym :: Symbol) s t a | sym t a -> s where
@@ -22,6 +24,12 @@ instance (A ~ t) => UpdateField "name" A t String where
 
 instance (A ~ t) => UpdateField "age" A t Int where
     updateField _ age (A oldStr _oldAge) = A oldStr age
+
+instance (A' ~ t) => UpdateField "name" A' t String where
+    updateField _ str (A' _oldStr oldA'ge) = A' str oldA'ge
+
+instance (A' ~ t) => UpdateField "age" A' t Int where
+    updateField _ age (A' oldStr _oldA'ge) = A' oldStr age
 
 instance (B ~ t) => UpdateField "name" B t Int where
     updateField _ int (B _oldInt oldStr) = B int oldStr
@@ -42,5 +50,6 @@ multiUpdate =
 singleUpdateFn =
     updateField #name "hello"
 
+multiUpdateFn :: _ => _
 multiUpdateFn x =
-    updateField #name "hello" $ updateField #age (5 :: Int) x :: A
+    updateField #name "hello" $ updateField #age (5 :: Int) x
