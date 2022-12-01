@@ -11,7 +11,7 @@ import Data.Proxy
 
 -- * The Type Class
 
-class UpdateField (sym :: Symbol) s t a where
+class UpdateField (sym :: Symbol) s t a | sym s t -> a where
     updateField :: Proxy sym -> a -> s -> t
 
 -- * Datatypes and Instances
@@ -75,9 +75,6 @@ multiUpdateFn
     -- the input to updating the name
     , ageT ~ ageS
     -- ^ This forces the input and output of the age update to be the same
-    , nameS ~ nameT
-    -- ^ And this forces the input and output of the name update to be the
-    -- same
     )
     => ageS
     -> nameT
@@ -107,3 +104,41 @@ defaultPolyA = PolyA "asdf" 44
 -- | Neat! our multi update works for a @'PolyA' 'String'@.
 wow :: PolyA String
 wow = multiUpdateFn defaultPolyA
+
+replaceNameWithBool
+    :: forall nameS nameT ageS ageT a.
+    ( Num a
+    , UpdateField "name" nameS nameT Bool
+    , UpdateField "age" ageS ageT a
+    , ageT ~ nameS
+    -- ^ A constraint that the output of updating the age is the same as
+    -- the input to updating the name
+    , ageT ~ ageS
+    -- ^ This forces the input and output of the age update to be the same
+    )
+    => ageS
+    -> nameT
+replaceNameWithBool x =
+    updateField #name True (updateField @"age" @ageS @ageT @a #age (5 :: a) x :: ageT)
+
+-- | This is just like 'replaceNameWithBool', but it
+replaceNameWithBoolSwap
+    :: forall nameS nameT ageS ageT.
+    ( UpdateField "name" nameS nameT Bool
+    , UpdateField "age" ageS ageT Int
+    , ageS ~ nameT
+    -- ^ A constraint that the output of updating the age is the same as
+    -- the input to updating the name
+    , ageS ~ ageT
+    -- ^ This forces the input and output of the age update to be the same
+    )
+    => nameS
+    -> ageT
+replaceNameWithBoolSwap x =
+    updateField #age (5 :: Int) (updateField @"name" #name True x :: nameT)
+
+wow' :: PolyA Bool
+wow' = replaceNameWithBool defaultPolyA
+
+wow'' :: PolyA Bool
+wow'' = replaceNameWithBoolSwap defaultPolyA
