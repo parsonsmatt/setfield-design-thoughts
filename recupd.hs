@@ -1,4 +1,5 @@
 {-# language DuplicateRecordFields #-}
+{-# language ScopedTypeVariables #-}
 {-# language FunctionalDependencies  #-}
 {-# language NoMonomorphismRestriction #-}
 {-# language OverloadedLabels #-}
@@ -8,14 +9,14 @@ import GHC.OverloadedLabels
 import GHC.TypeLits
 import Data.Proxy
 
-data A = A { name :: String, age :: Int }
+-- * The Type Class
 
-data A' = A' { name :: String, age :: Int }
-
-data B = B { name :: Int, age :: String}
-
-class UpdateField (sym :: Symbol) s t a | sym t a -> s where
+class UpdateField (sym :: Symbol) s t a where
     updateField :: Proxy sym -> a -> s -> t
+
+-- * Datatypes and Instances
+
+data A = A { name :: String, age :: Int }
 
 -- In the case of monomorphic update, we can introduce a constraint that
 -- should fix the target type.
@@ -25,11 +26,19 @@ instance (A ~ t) => UpdateField "name" A t String where
 instance (A ~ t) => UpdateField "age" A t Int where
     updateField _ age (A oldStr _oldAge) = A oldStr age
 
+data A' = A' { name :: String, age :: Int }
+
+-- This instance should not be allowed... or should it?
+instance UpdateField "name" A A' String where
+    updateField _ name (A _ i) = A' name i
+
 instance (A' ~ t) => UpdateField "name" A' t String where
     updateField _ str (A' _oldStr oldA'ge) = A' str oldA'ge
 
 instance (A' ~ t) => UpdateField "age" A' t Int where
     updateField _ age (A' oldStr _oldA'ge) = A' oldStr age
+
+data B = B { name :: Int, age :: String}
 
 instance (B ~ t) => UpdateField "name" B t Int where
     updateField _ int (B _oldInt oldStr) = B int oldStr
@@ -50,6 +59,51 @@ multiUpdate =
 singleUpdateFn =
     updateField #name "hello"
 
-multiUpdateFn :: _ => _
+-- | This function demonstrates a multi-update chain with the 'UpdateField'
+-- class. By itself, the updates don't work - the intermediate type is
+-- lost. However, if we add constraints that *force* the input and outputs
+-- to line up, then GHC is happy with it.
+--
+-- This suggests that we can desugar a record update expression to a series
+-- of 'updateField' calls along with a few wanted constraints.
+multiUpdateFn
+    :: forall nameS nameT ageS ageT.
+    ( UpdateField "name" nameS nameT String
+    , UpdateField "age" ageS ageT Int
+    , ageT ~ nameS
+    -- ^ A constraint that the output of updating the age is the same as
+    -- the input to updating the name
+    , ageT ~ ageS
+    -- ^ This forces the input and output of the age update to be the same
+    , nameS ~ nameT
+    -- ^ And this forces the input and output of the name update to be the
+    -- same
+    )
+    => ageS
+    -> nameT
 multiUpdateFn x =
-    updateField #name "hello" $ updateField #age (5 :: Int) x
+    updateField #name "hello" (updateField #age (5 :: Int) x :: ageT)
+
+updateNameAgeA :: A -> A
+updateNameAgeA a = a { name = "hello", age = 5 }
+
+-- * Polymorphic Updates
+
+-- $polyupdates
+--
+-- So it's one thing to get monomorphic updates.
+
+data PolyA a = PolyA { name :: a, age :: Int }
+
+instance  UpdateField "name" (PolyA a) (PolyA b) b where
+    updateField _ str (PolyA _oldStr oldAge) = PolyA str oldAge
+
+instance (PolyA a ~ t) => UpdateField "age" (PolyA a) t Int where
+    updateField _ age (PolyA oldStr _oldAge) = PolyA oldStr age
+
+defaultPolyA :: PolyA String
+defaultPolyA = PolyA "asdf" 44
+
+-- | Neat! our multi update works for a @'PolyA' 'String'@.
+wow :: PolyA String
+wow = multiUpdateFn defaultPolyA
