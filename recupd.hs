@@ -5,6 +5,9 @@
 {-# language OverloadedLabels #-}
 {-# language DataKinds #-}
 
+-- Only for warnings/examples
+{-# language PartialTypeSignatures #-}
+
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Data.Proxy
@@ -142,3 +145,49 @@ wow' = replaceNameWithBool defaultPolyA
 
 wow'' :: PolyA Bool
 wow'' = replaceNameWithBoolSwap defaultPolyA
+
+data TwoPoly a b = TwoPoly { name :: a, age :: b }
+
+instance (b ~ d) => UpdateField "name" (TwoPoly a b) (TwoPoly c d) c where
+    updateField _ str (TwoPoly _oldStr oldAge) = TwoPoly str oldAge
+
+instance (b ~ d) => UpdateField "age" (TwoPoly b a) (TwoPoly d c) c where
+    updateField _ age (TwoPoly oldStr _oldAge) = TwoPoly oldStr age
+
+defaultTwoPoly :: TwoPoly String Int
+defaultTwoPoly = TwoPoly "asdf" 33
+
+wowTwoPoly = replaceNameWithBool defaultTwoPoly
+wowTwoPoly' = replaceNameWithBoolSwap defaultTwoPoly
+
+-- | A challenger approaches.
+--
+-- This type has the same type variable in two slots, so we can't change
+-- the type in a field update unless we update *both* fields. This means we
+-- can't simply splice in a composition of field updates when the type is
+-- changing.
+data SamePolyVar a = SamePolyVar { name :: a, age :: a }
+
+instance (t ~ SamePolyVar a) => UpdateField "name" (SamePolyVar a) t a where
+    updateField _ str (SamePolyVar _oldStr oldAge) = SamePolyVar str oldAge
+
+instance (t ~ SamePolyVar a) => UpdateField "age" (SamePolyVar a) t a where
+    updateField _ age (SamePolyVar oldStr _oldAge) = SamePolyVar oldStr age
+
+-- | But type inference works fine, if the input type is known.
+updateSamePolyVar :: SamePolyVar Int -> _ -- SamePolyVar Int
+updateSamePolyVar =
+    updateField #name 10 . updateField #age 20
+
+-- * Solving Multiple Fields with Shared Type
+--
+-- OK, so, dang. If we have two fields with the same type variable, then we
+-- can either:
+--
+-- 1. Do a non-type changing update with a single field, or
+-- 2. Do a type-changing update with all fields
+--
+-- This is introducing a concept: "update *fields*" instead of the simpler
+-- "update field".
+--
+-- This suggests a new mechanism may be necessary...
