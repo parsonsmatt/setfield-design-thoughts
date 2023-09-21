@@ -14,6 +14,8 @@
 
 module Recupd where
 
+import GHC.Records (HasField(getField))
+
 -- * The Type Class
 
 -- | OK, so this is a possible interface for updating a field. We accept
@@ -33,6 +35,8 @@ module Recupd where
 class SetField sym s t a | sym s t -> a where
     setField :: a -> s -> t
 
+modifyField :: forall sym s t a b. (HasField sym s a, SetField sym s t b) => (a -> b) -> s -> t
+modifyField f s = setField @sym (f (getField @sym s)) s
 
 -- * Datatypes and Instances
 
