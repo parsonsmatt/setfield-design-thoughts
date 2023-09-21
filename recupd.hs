@@ -1,4 +1,5 @@
 {-# language DuplicateRecordFields #-}
+{-# language PolyKinds #-}
 {-# language ScopedTypeVariables #-}
 {-# language FunctionalDependencies  #-}
 {-# language NoMonomorphismRestriction #-}
@@ -13,12 +14,10 @@
 
 module Recupd where
 
-import GHC.TypeLits
-
 -- * The Type Class
 
 -- | OK, so this is a possible interface for updating a field. We accept
--- a `sym :: Symbol` signifying the record label, and an @s@ for the source
+-- a `sym :: k` signifying the record label, and an @s@ for the source
 -- record, a @t@ for the target record, and finally an @a@ for the type of
 -- the field.
 --
@@ -31,7 +30,7 @@ import GHC.TypeLits
 --
 -- I chose not to do this, because conceptually, "modify" is a composition
 -- of "get" and "set".
-class SetField (sym :: Symbol) s t a | sym s t -> a where
+class SetField sym s t a | sym s t -> a where
     setField :: a -> s -> t
 
 
