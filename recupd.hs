@@ -9,9 +9,11 @@
 -- Only for warnings/examples
 {-# language PartialTypeSignatures #-}
 
-import GHC.OverloadedLabels
+{-# OPTIONS_GHC -Wall -fno-warn-missing-signatures #-}
+
+module Recupd where
+
 import GHC.TypeLits
-import Data.Proxy
 
 -- * The Type Class
 
@@ -31,11 +33,6 @@ import Data.Proxy
 -- of "get" and "set".
 class SetField (sym :: Symbol) s t a | sym s t -> a where
     setField :: a -> s -> t
-
--- | This is used to make the API a bit easier to use. I could have just
--- done type applications. I don't remember why I did this instead.
-instance (KnownSymbol sym, sym ~ sym') => IsLabel sym (Proxy sym') where
-    fromLabel = Proxy
 
 
 -- * Datatypes and Instances
