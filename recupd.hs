@@ -4,6 +4,7 @@
 {-# language NoMonomorphismRestriction #-}
 {-# language OverloadedLabels #-}
 {-# language DataKinds #-}
+{-# language AllowAmbiguousTypes #-}
 
 -- Only for warnings/examples
 {-# language PartialTypeSignatures #-}
@@ -29,7 +30,7 @@ import Data.Proxy
 -- I chose not to do this, because conceptually, "modify" is a composition
 -- of "get" and "set".
 class SetField (sym :: Symbol) s t a | sym s t -> a where
-    setField :: Proxy sym -> a -> s -> t
+    setField :: a -> s -> t
 
 -- | This is used to make the API a bit easier to use. I could have just
 -- done type applications. I don't remember why I did this instead.
@@ -45,10 +46,10 @@ data A = A { name :: String, age :: Int }
 -- should fix the target type. This equality constraint will help make type
 -- inference better.
 instance (A ~ t) => SetField "name" A t String where
-    setField _ str (A _oldStr oldAge) = A str oldAge
+    setField str (A _oldStr oldAge) = A str oldAge
 
 instance (A ~ t) => SetField "age" A t Int where
-    setField _ age (A oldStr _oldAge) = A oldStr age
+    setField age (A oldStr _oldAge) = A oldStr age
 
 -- | Here's a neat trick that this design allows. This type is like 'A',
 -- but only has a name.
@@ -56,7 +57,7 @@ data OnlyName = OnlyName { name :: String }
 
 -- | We get the obvious instance here.
 instance (OnlyName ~ t) => SetField "name" OnlyName t String where
-    setField _ str (OnlyName _oldStr) = OnlyName str
+    setField str (OnlyName _oldStr) = OnlyName str
 
 
 -- | And then we get this synthetic instance.
@@ -71,20 +72,20 @@ instance (OnlyName ~ t) => SetField "name" OnlyName t String where
 -- This might allow folks to write really nice builder pattern API for
 -- safely constructing values incrementally.
 instance (A ~ t) => SetField "age" OnlyName t Int where
-    setField _ age (OnlyName oldStr) = A oldStr age
+    setField age (OnlyName oldStr) = A oldStr age
 
 createA :: Int -> OnlyName -> A
-createA age onlyName = setField #age age onlyName
+createA age onlyName = setField @"age" age onlyName
 -- with sugar,
     -- onlyName { age = age }
 
 data B = B { name :: Int, age :: String}
 
 instance (B ~ t) => SetField "name" B t Int where
-    setField _ int (B _oldInt oldStr) = B int oldStr
+    setField int (B _oldInt oldStr) = B int oldStr
 
 instance (B ~ t) => SetField "age" B t String where
-    setField _ str (B oldInt _oldStr) = B oldInt str
+    setField str (B oldInt _oldStr) = B oldInt str
 
 -- I leave off type signatures here as a test to see how well GHC can do
 -- type inference. These all infer fine.
@@ -92,13 +93,13 @@ defaultA =
     A { name = "goodbye", age = 10 }
 
 singleUpdate =
-    setField #name "hello" defaultA
+    setField @"name" "hello" defaultA
 
 multiUpdate =
-    setField #name "hello" $ setField #age (5 :: Int) defaultA
+    setField @"name" "hello" $ setField @"age" (5 :: Int) defaultA
 
 singleUpdateFn =
-    setField #name "hello"
+    setField @"name" "hello"
 
 -- | This function demonstrates a multi-update chain with the 'SetField'
 -- class. By itself, the updates don't work - the intermediate type is
@@ -121,8 +122,8 @@ multiUpdateFn
     => ageS
     -> nameT
 multiUpdateFn x =
-    (setField @"name" @nameS @nameT #name "hello" :: nameS -> nameT)
-        (setField @"age" @ageS @ageT #age 5 x :: nameS)
+    (setField @"name" @nameS @nameT "hello" :: nameS -> nameT)
+        (setField @"age" @ageS @ageT 5 x :: nameS)
 
 -- OK, so this is the real core of what's necessary for GHC to change in
 -- order to make this work. We have an expression:
@@ -131,7 +132,7 @@ multiUpdateFn x =
 --
 -- GHC can desugar this to:
 --
--- > setField #name "hello" (setField #age 5 x)
+-- > setField @"name" "hello" (setField @"age" 5 x)
 --
 -- However, without additional constraints, GHC is unhappy with this
 -- - there's ambiguity.
@@ -164,8 +165,6 @@ multiUpdateFn x =
 -- updating the age field of `x` must be the source of updating the name
 -- field of `x`. We also require that the source and target of updating the
 -- age remains the same.
---
--- Why do we
 
 updateNameAgeA :: A -> A
 updateNameAgeA a = a { name = "hello", age = 5 }
@@ -180,10 +179,10 @@ updateNameAgeA a = a { name = "hello", age = 5 }
 data PolyA a = PolyA { name :: a, age :: Int }
 
 instance  SetField "name" (PolyA a) (PolyA b) b where
-    setField _ str (PolyA _oldStr oldAge) = PolyA str oldAge
+    setField str (PolyA _oldStr oldAge) = PolyA str oldAge
 
 instance (PolyA a ~ t) => SetField "age" (PolyA a) t Int where
-    setField _ age (PolyA oldStr _oldAge) = PolyA oldStr age
+    setField age (PolyA oldStr _oldAge) = PolyA oldStr age
 
 defaultPolyA :: PolyA String
 defaultPolyA = PolyA "asdf" 44
@@ -206,7 +205,7 @@ replaceNameWithBool
     => ageS
     -> nameT
 replaceNameWithBool x =
-    setField #name True (setField @"age" @ageS @ageT @a #age (5 :: a) x :: ageT)
+    setField @"name" True (setField @"age" @ageS @ageT @a (5 :: a) x :: ageT)
 
 -- | This is just like 'replaceNameWithBool', but it
 replaceNameWithBoolSwap
@@ -222,7 +221,7 @@ replaceNameWithBoolSwap
     => nameS
     -> ageT
 replaceNameWithBoolSwap x =
-    setField #age (5 :: Int) (setField @"name" #name True x :: nameT)
+    setField @"age" (5 :: Int) (setField @"name" True x :: nameT)
 
 wow' :: PolyA Bool
 wow' = replaceNameWithBool defaultPolyA
@@ -233,10 +232,10 @@ wow'' = replaceNameWithBoolSwap defaultPolyA
 data TwoPoly a b = TwoPoly { name :: a, age :: b }
 
 instance (b ~ d) => SetField "name" (TwoPoly a b) (TwoPoly c d) c where
-    setField _ str (TwoPoly _oldStr oldAge) = TwoPoly str oldAge
+    setField str (TwoPoly _oldStr oldAge) = TwoPoly str oldAge
 
 instance (b ~ d) => SetField "age" (TwoPoly b a) (TwoPoly d c) c where
-    setField _ age (TwoPoly oldStr _oldAge) = TwoPoly oldStr age
+    setField age (TwoPoly oldStr _oldAge) = TwoPoly oldStr age
 
 defaultTwoPoly :: TwoPoly String Int
 defaultTwoPoly = TwoPoly "asdf" 33
@@ -253,15 +252,15 @@ wowTwoPoly' = replaceNameWithBoolSwap defaultTwoPoly
 data SamePolyVar a = SamePolyVar { name :: a, age :: a }
 
 instance (t ~ SamePolyVar a) => SetField "name" (SamePolyVar a) t a where
-    setField _ str (SamePolyVar _oldStr oldAge) = SamePolyVar str oldAge
+    setField str (SamePolyVar _oldStr oldAge) = SamePolyVar str oldAge
 
 instance (t ~ SamePolyVar a) => SetField "age" (SamePolyVar a) t a where
-    setField _ age (SamePolyVar oldStr _oldAge) = SamePolyVar oldStr age
+    setField age (SamePolyVar oldStr _oldAge) = SamePolyVar oldStr age
 
 -- | But type inference works fine, if the input type is known.
 updateSamePolyVar :: SamePolyVar Int -> _ -- SamePolyVar Int
 updateSamePolyVar =
-    setField #name 10 . setField #age 20
+    setField @"name" 10 . setField @"age" 20
 
 -- * Solving Multiple Fields with Shared Type
 --
